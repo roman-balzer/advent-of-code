@@ -1,9 +1,10 @@
 import { parseD16Input } from "./parse.ts"
+console.time("ExecutionTime")
 
-const valves = await parseD16Input(!true)
+const valvesArr = await parseD16Input(!true)
 
-const nonZeroValves = valves.filter((v) => v.flow !== 0 || v.name === "AA")
-const zeroValves = valves.filter((v) => v.flow === 0 && v.name !== "AA")
+const nonZeroValves = valvesArr.filter((v) => v.flow !== 0 || v.name === "AA")
+const zeroValves = valvesArr.filter((v) => v.flow === 0 && v.name !== "AA")
 
 zeroValves.forEach((outer) => {
   zeroValves.forEach((inner) => {
@@ -69,71 +70,37 @@ const valvesMap = nonZeroValves.reduce(
   (acc, { name, leads, flow }) => acc.set(name, { flow, leads }),
   new Map<string, { flow: number; leads: Map<string, number> }>()
 )
-// console.log(`valvesMap`, valvesMap)
+const valves = Array.from(valvesMap.keys()).filter((v) => v !== "AA")
 
-const keys = Array.from(valvesMap.keys()).filter((k) => k !== "AA")
-console.log(`keys`, keys)
+const maxFlowPerPath = new Map<string, number>()
 
-const calcFlow = (permutation: string[]) => {
-  let timer = 30
-  let flow = 0
-  permutation.forEach((valve, idx, arr) => {
-    const comingFrom = valvesMap.get(arr[idx - 1] || "AA")!
-    const distance = comingFrom.leads.get(valve)!
-    timer -= distance + 1
-    flow += timer * valvesMap.get(valve)!.flow
+const walk = (
+  nodeFrom: string,
+  timeLeft: number,
+  flow: number,
+  nodesLeft: string[],
+  path: string
+) => {
+  if (nodesLeft.length === 0) return
+  const nodeStart = valvesMap.get(nodeFrom)!
+  nodesLeft.forEach((nodeTo) => {
+    const nodeDef = valvesMap.get(nodeTo)!
+    const newTimerLeft = timeLeft - (nodeStart.leads.get(nodeTo)! + 1)
+    const newFlow = flow + newTimerLeft * nodeDef.flow
+    const newPath = `${path}-${nodeTo}`
+    const newNodesLeft = nodesLeft.filter((v) => v !== nodeTo)
+    if (newTimerLeft < 0) return
+    maxFlowPerPath.set(newPath, newFlow)
+    walk(nodeTo, newTimerLeft, newFlow, newNodesLeft, newPath)
   })
-  return flow
 }
 
-const walkPaths = (nodes: string[]) => {
-  const distances = nodes.map((val) => {
-    const dist = [val].reduce((acc, valve, idx, arr) => {
-      const comingFrom = valvesMap.get(arr[idx - 1] || "AA")!
-      const distance = comingFrom.leads.get(valve)!
-      return acc + distance
-    }, 0)
-    return {
-      dist,
-      path: [val],
-      remainingNodes: nodes.filter((v) => val !== v),
-    }
-  })
-  return distances
-}
+walk("AA", 30, 0, valves, "AA")
 
-let startPoints = walkPaths(keys)
-console.log(`🚀TCL ~ file: solution.p1.ts:161 ~ startPoints`, startPoints)
-
-while (true) {
-  startPoints = startPoints
-    .map((path) => {
-      const nexPaths = path.remainingNodes
-        .map((nextP, _, arr) => {
-          const prevNode = path.path[path.path.length - 1]
-          return {
-            dist: path.dist + valvesMap.get(prevNode)!.leads.get(nextP)!,
-            path: [...path.path, nextP],
-            remainingNodes: arr.filter((v) => v !== nextP),
-          }
-        })
-        .filter((path) => path.dist <= 30)
-      return [{ ...path, remainingNodes: [] }, ...nexPaths]
-    })
-    .flat()
-  if (!startPoints.some((path) => path.remainingNodes.length > 0)) {
-    break
-  }
-}
+console.log(`🚀TCL ~ file: solution.p1.ts:94 ~ arr`, maxFlowPerPath)
 
 console.log(
-  `🚀TCL ~ file: solution.p1.ts:161 ~ startPoints`,
-  startPoints,
-  startPoints.length
+  `max distance`,
+  Math.max(...Array.from(maxFlowPerPath).map((v) => v[1]))
 )
-
-console.log(
-  `distances`,
-  calcFlow.sort((a, b) => b - a)
-)
-console.log(`max distance`, Math.max(...calcFlow))
+console.timeEnd("ExecutionTime")
